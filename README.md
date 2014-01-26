@@ -7,8 +7,8 @@ window snapping for x11
 
 Requirements:
 
-PyUserInput\n
-python-xlib
+PyUserInput,
+python-xlib,
 wmctrl
 
 
