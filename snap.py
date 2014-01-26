@@ -6,7 +6,6 @@
 
 from pymouse import PyMouse,PyMouseEvent
 from wmctrl import Window, BaseWindow
-from multiprocessing.pool import ThreadPool
 
 LEFT_MOUSE_BUTTON = 1 #PyMouse mapping for left mouse button
 COUNTER = 50 #cleaning the dict or window sizes after every x clicks, this has to happen because no events for closing windows are caught, therefor the dict (original_window_sizes) potentially grows forever
