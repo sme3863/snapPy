@@ -1,26 +1,33 @@
 ##TODO 	snap windows earlier, some pixel before mouse hits dead end
 ##	fix issue in __window_header_clicked()
-##
-##
+##	update handling of input commands
+##	write some documentation on input arguments
 ##
 
 from pymouse import PyMouse,PyMouseEvent
 from wmctrl import Window, BaseWindow
+import sys
 
 LEFT_MOUSE_BUTTON = 1 #PyMouse mapping for left mouse button
 COUNTER = 50 #cleaning the dict or window sizes after every x clicks, this has to happen because no events for closing windows are caught, therefor the dict (original_window_sizes) potentially grows forever
 global HEADER_CLICKED #meh hacks
 
 class MouseEventHandler(PyMouseEvent):
-	def __init__(self):
+	def __init__(self,max_width,max_height,wm_width=2,wm_height=44,clickable_offset=23, margin=10):
 		PyMouseEvent.__init__(self)
 		
 		#get these programmatically
-		self.WM_WIDTH = 2 #lubuntu standard
-		self.WM_HEIGHT = 52 #lubuntu standard
-		self.WM_BOTTOM_HEIGHT = 4 #lubuntu standard
-		self.TASKBAR_HEIGHT = 24 #lubuntu standard
+		self.WM_WIDTH = int(wm_width) ##WM side of window width in pixels
+		self.WM_HEIGHT = int(wm_height) #WM top of window height in pixels
+		self.CLICKABLE_OFFSET = int(clickable_offset) #number of pixels on the WM window that are not moving the window when clicked
+		self.MARGIN = int(margin) #dictates when snapping occures
+		#self.WM_BOTTOM_HEIGHT = 4 #number of pixels at the bottom of each window
+		#self.TASKBAR_HEIGHT = 30 #height of the taskbar in pixels, atm only taskbars at the bottom are considered 
 		###########################################
+
+		self.MAX_WINDOW_WIDTH = int(max_width)
+		self.MAX_WINDOW_HEIGHT = int(max_height)
+		
 
 		self.mouse = PyMouse()
 		screen_size = self.mouse.screen_size()
@@ -28,7 +35,6 @@ class MouseEventHandler(PyMouseEvent):
 		self.screen_height = screen_size[1]
 		self.counter = COUNTER 
 		self.original_window_sizes = {} #info used to restore windows when 'unsnapping' them
-		
 
 	def click(self, x, y, button, press):
 		if self.counter == 0:
@@ -46,15 +52,14 @@ class MouseEventHandler(PyMouseEvent):
 						return
 					restore = self.__window_in_list(window)
 					self.__handle_event(window,x,y,restore)
-			
 	
 	def __handle_event(self,window,x,y,restore):
-		if y == 0:
-			self.__maximize(window)
-		elif x == 0:
+		if x < self.MARGIN:
 			self.__fill_left_half(window)
-		elif x == self.screen_width-1:
+		elif x > self.screen_width-1-self.MARGIN:
 			self.__fill_right_half(window)
+		elif y < self.MARGIN:
+			self.__maximize(window)
 		elif restore:
 			self.__restore_size(window)
 
@@ -67,17 +72,17 @@ class MouseEventHandler(PyMouseEvent):
 	def __maximize(self,window):
 		if not self.__window_in_list(window):
 			self.__update_window(window)
-		self.__resize_window(window,0,0,self.screen_width+(self.WM_WIDTH * 2),self.screen_height - self.TASKBAR_HEIGHT - self.WM_BOTTOM_HEIGHT) #(self.WM_WIDTH * 2) -> compensate for WM borders
+		self.__resize_window(window,0,0,self.MAX_WINDOW_WIDTH,self.MAX_WINDOW_HEIGHT)
 
 	def __fill_right_half(self,window):
 		if not self.__window_in_list(window):
 			self.__update_window(window)
-		self.__resize_window(window,(self.screen_width/2)+(self.WM_WIDTH * 2),0,self.screen_width/2,self.screen_height - self.TASKBAR_HEIGHT - self.WM_BOTTOM_HEIGHT) #(self.WM_WIDTH * 2) -> compensate for WM borders
+		self.__resize_window(window,self.MAX_WINDOW_WIDTH/2,0,self.MAX_WINDOW_WIDTH/2,self.MAX_WINDOW_HEIGHT)
 
 	def __fill_left_half(self,window):
 		if not self.__window_in_list(window):
 			self.__update_window(window)
-		self.__resize_window(window,0,0,(self.screen_width/2)+(self.WM_WIDTH * 2),self.screen_height - self.TASKBAR_HEIGHT - self.WM_BOTTOM_HEIGHT) #(self.WM_WIDTH * 2) -> compensate for WM borders
+		self.__resize_window(window,0,0,self.MAX_WINDOW_WIDTH/2,self.MAX_WINDOW_HEIGHT)
 
 	def __restore_size(self,window):
 		if window.id in self.original_window_sizes:
@@ -100,7 +105,7 @@ class MouseEventHandler(PyMouseEvent):
 		left_top_x = window.x - self.WM_WIDTH
 		right_bottom_x = window.x + window.w
 		left_top_y = window.y - self.WM_HEIGHT
-		right_bottom_y = window.y
+		right_bottom_y = window.y - self.CLICKABLE_OFFSET
 		inside = (left_top_x <= x <= right_bottom_x and left_top_y <= y <= right_bottom_y) # simple point inside rectangle check
 		#if not inside:
 		#	print("mouseX",x, "mouseY", y)
@@ -146,6 +151,29 @@ class MouseEventHandler(PyMouseEvent):
 			return None
 
 
+
+def run_analysis():
+	try:
+		print("run in maximized window to get values for screen width and height")
+		window = Window.get_active()
+		return window.w, window.h
+	except ValueError:
+		#catching Error in the wmctrl function list(), still holding already closed windows
+		return None
+
 if __name__ == "__main__":
-	eventhandler = MouseEventHandler()
-	eventhandler.run()
+	args = sys.argv
+	if len(args) == 1:
+		w,h = run_analysis()
+		print("width and height are:", w,h)
+		print("use these values to start snap.py")
+	elif len(args) == 3:	
+		eventhandler = MouseEventHandler(args[1],args[2])
+		eventhandler.run()
+	elif len(args) == 7:	
+		eventhandler = MouseEventHandler(args[1],args[2],args[3],args[4],args[5],args[6])
+		eventhandler.run()
+	else:
+		print("Usage: python snap.py width height [wm_width] [wm_height] [clickable_offset] [margin]")
+		print("Example: python snap.py 1920 924 2 44 23 10")
+
